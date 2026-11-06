@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NexaStore.Application.AI;
@@ -16,7 +17,8 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
         options.Enabled,
         options.Provider,
         options.Model,
-        "Local LLM Conversation"));
+        ["chat", "prompt-styles", "streaming", "cancellation"],
+        AssistantResponseStyles.All));
 
     [HttpPost("chat/stream")]
     [Produces("text/event-stream")]
@@ -24,6 +26,10 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task Stream([FromBody] AssistantChatRequest request, CancellationToken cancellationToken = default)
     {
+        var requestedId = HttpContext.TraceIdentifier;
+        var startedAt = TimeProvider.System.GetTimestamp();
+        var sequence = 0;
+
         Response.StatusCode = StatusCodes.Status200OK;
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache, no-transform";
@@ -31,11 +37,12 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
 
         try
         {
-            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, cancellationToken))
+            await WriteEventAsync("started", new { requestedId, model = options.Model, responseStyle = request.ResponseStyle }, cancellationToken);
+            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, request.ResponseStyle, cancellationToken))
             {
-                await WriteEventAsync("delta", new { content = chunk }, cancellationToken);
+                await WriteEventAsync("delta", new { sequence = sequence++, content = chunk }, cancellationToken);
             }
-            await WriteEventAsync("done", new { }, cancellationToken);
+            await WriteEventAsync("done", new { chunks = sequence, elapsedMs = (long)TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

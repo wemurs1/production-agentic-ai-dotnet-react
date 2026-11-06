@@ -60,6 +60,8 @@ services:
       AI__Provider: Ollama
       AI__Endpoint: http://ollama:11434
       AI__Model: ${OLLAMA_MODEL:-qwen3.5:4b}
+      AI__Temperature: "0.3"
+      AI__MaxOutputTokens: "800"
     ports:
       - "5175:8080"
     depends_on:
