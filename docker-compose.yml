@@ -17,6 +17,36 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.40.6
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    ports:
+      - "11434:11434"
+    volumes:
+      - nexastore-ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  ollama-model:
+    image: ollama/ollama:0.40.6
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/ollama"]
+    command: ["pull", "${OLLAMA_MODEL:-qwen3.5:4b}"]
+    volumes:
+      - nexastore-ollama:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
   nexastore-api:
     build:
@@ -26,11 +56,17 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__NexaStore: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Database__ApplyMigrationsOnStartup: "true"
+      AI__Enabled: "true"
+      AI__Provider: Ollama
+      AI__Endpoint: http://ollama:11434
+      AI__Model: ${OLLAMA_MODEL:-qwen3.5:4b}
     ports:
       - "5175:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      ollama-model:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   nexastore-web:
@@ -46,3 +82,4 @@ services:
 
 volumes:
   nexastore-postgres:
+  nexastore-ollama:

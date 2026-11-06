@@ -2,6 +2,7 @@ import { Bot, Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Logo } from "@/components/ui/Logo";
+import { AssistantPanel } from "@/features/assistant/AssistantPanel";
 import { useCart } from "@/features/cart/queries";
 import { cn } from "@/lib/cn";
 
@@ -106,47 +107,7 @@ export function Header() {
           </nav>
         )}
       </header>
-      {ai && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-ink-950/80 p-4 backdrop-blur"
-          onClick={() => setAi(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Nexa AI preview"
-            onClick={(e) => e.stopPropagation()}
-            className="glass relative max-w-lg rounded-[2rem] p-8 shadow-2xl"
-          >
-            <button
-              onClick={() => setAi(false)}
-              className="absolute right-5 top-5 rounded-full p-2 hover:bg-white/8"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-            <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-400 to-electric-300 text-ink-950">
-              <Bot size={28} />
-            </div>
-            <p className="mt-6 text-xs font-bold uppercase tracking-[.2em] text-violet-300">
-              Next evolution
-            </p>
-            <h2 className="mt-2 font-display text-3xl font-bold">
-              Nexa AI is warming up.
-            </h2>
-            <p className="mt-3 leading-7 text-slate-400">
-              Soon you’ll compare hardware, reason over buying guides, check
-              live inventory and manage orders through one grounded assistant.
-            </p>
-            <button
-              disabled
-              className="mt-7 w-full rounded-full bg-white/8 py-3 text-sm font-bold text-slate-500"
-            >
-              AI Assistant coming in the next phase
-            </button>
-          </section>
-        </div>
-      )}
+      <AssistantPanel open={ai} onClose={() => setAi(false)} />
     </>
   );
 }

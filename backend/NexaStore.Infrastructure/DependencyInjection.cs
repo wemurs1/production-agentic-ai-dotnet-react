@@ -1,14 +1,34 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using NexaStore.Application.Abstractions;
+using NexaStore.Application.AI;
+using NexaStore.Infrastructure.AI;
 using NexaStore.Infrastructure.Persistence;
 using NexaStore.Infrastructure.Persistence.Repositories;
 using NexaStore.Infrastructure.Persistence.Seeding;
+using OllamaSharp;
 
 namespace NexaStore.Infrastructure;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddLocalAI(this IServiceCollection services, AIOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        services.AddSingleton(options);
+        if (!options.Enabled)
+        {
+            services.AddScoped<INexaAssistantService, DisabledNexaAssistantService>();
+            return services;
+        }
+
+        services.AddSingleton<IChatClient>(_ => new OllamaApiClient(new Uri(options.EndPoint), options.Model));
+        services.AddScoped<INexaAssistantService, OllamaNexaAssistantService>();
+        return services;
+    }
+
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
