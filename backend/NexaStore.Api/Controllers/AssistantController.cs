@@ -8,7 +8,10 @@ namespace NexaStore.Api.Controllers;
 [ApiController]
 [Route("api/assistant")]
 [Tags("Nexa AI")]
-public sealed class AssistantController(INexaAssistantService assistant, AIOptions options, ILogger<AssistantController> logger) : ControllerBase
+public sealed class AssistantController(
+    INexaAssistantService assistant,
+    AIOptions options,
+    ILogger<AssistantController> logger) : ControllerBase
 {
     [HttpGet("status")]
     [ProducesResponseType<AssistantStatusDto>(StatusCodes.Status200OK)]
@@ -16,14 +19,22 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
         options.Enabled,
         options.Provider,
         options.Model,
-        "Local LLM Conversation"));
+        ["chat", "prompt-styles", "streaming", "cancellation"],
+        AssistantResponseStyles.All));
+
 
     [HttpPost("chat/stream")]
     [Produces("text/event-stream")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-    public async Task Stream([FromBody] AssistantChatRequest request, CancellationToken cancellationToken = default)
+    public async Task Stream(
+        [FromBody] AssistantChatRequest request,
+        CancellationToken cancellationToken = default)
     {
+        var requestedId = HttpContext.TraceIdentifier;
+        var startedAt = TimeProvider.System.GetTimestamp();
+        var sequence = 0;
+
         Response.StatusCode = StatusCodes.Status200OK;
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache, no-transform";
@@ -31,15 +42,16 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
 
         try
         {
-            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, cancellationToken))
+            await WriteEventAsync("started", new { requestedId, model = options.Model, responseStyle = request.ResponseStyle }, cancellationToken);
+            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, request.ResponseStyle, cancellationToken))
             {
-                await WriteEventAsync("delta", new { content = chunk }, cancellationToken);
+                await WriteEventAsync("delta", new { sequence = sequence++, content = chunk }, cancellationToken);
             }
-            await WriteEventAsync("done", new { }, cancellationToken);
+            await WriteEventAsync("done", new { chunks = sequence, elapsedMs = TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation("Nexa AI streaming request was cancedlled by the client");
+            logger.LogInformation("Nexa AI streaming request was cancelled by the client");
         }
         catch (Exception ex)
         {
@@ -50,6 +62,7 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
                 cancellationToken);
         }
     }
+
 
     private async Task WriteEventAsync(string eventName, object payload, CancellationToken cancellationToken = default)
     {

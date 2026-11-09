@@ -7,6 +7,8 @@ public sealed class AIOptions
     public string Provider { get; init; } = "ollama";
     public string EndPoint { get; init; } = "http://localhost:11434";
     public string Model { get; init; } = "qwen3.5:4b";
+    public float Temperature { get; init; } = 0.3f;
+    public int MaxOutputTokens { get; init; } = 4096;
 
     public void Validate()
     {
@@ -26,5 +28,15 @@ public sealed class AIOptions
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(Model);
+
+        if (Temperature is < 0 or > 2)
+        {
+            throw new InvalidOperationException("AI:Temperature must be between 0 and 2");
+        }
+
+        if (MaxOutputTokens is < 64 or > 4096)
+        {
+            throw new InvalidOperationException("AI:MaxOutputTokens must be between 64 and 4096");
+        }
     }
 }

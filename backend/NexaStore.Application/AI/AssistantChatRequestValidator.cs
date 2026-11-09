@@ -9,6 +9,8 @@ public class AssistantChatRequestValidator : AbstractValidator<AssistantChatRequ
     public AssistantChatRequestValidator()
     {
         RuleFor(request => request.Messages)
+            .Cascade(CascadeMode.Stop)
+            .NotNull()
             .NotEmpty()
             .Must(messages => messages.Count <= 20)
             .WithMessage("A conversation can contain at most 20 messages.");
@@ -28,5 +30,10 @@ public class AssistantChatRequestValidator : AbstractValidator<AssistantChatRequ
         RuleFor(request => request.Messages)
             .Must(messages => messages.Count > 0 && string.Equals(messages[^1].Role, "user", StringComparison.OrdinalIgnoreCase))
             .WithMessage("The final conversation message must be from the user.");
+
+        RuleFor(request => request.ResponseStyle)
+            .NotEmpty()
+            .Must(style => AssistantResponseStyles.All.Contains(style, StringComparer.OrdinalIgnoreCase))
+            .WithMessage("Response style must be 'concise', 'balanced', or 'detailed'");
     }
 }
