@@ -1,15 +1,18 @@
-using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NexaStore.Application.AI;
 using NexaStore.Infrastructure.AI;
+using System.Text.Json;
 
 namespace NexaStore.Api.Controllers;
 
 [ApiController]
 [Route("api/assistant")]
 [Tags("Nexa AI")]
-public sealed class AssistantController(INexaAssistantService assistant, AIOptions options, ILogger<AssistantController> logger) : ControllerBase
+
+public sealed class AssistantController(
+    INexaAssistantService assistant,
+    AIOptions options,
+    ILogger<AssistantController> logger) : ControllerBase
 {
     [HttpGet("status")]
     [ProducesResponseType<AssistantStatusDto>(StatusCodes.Status200OK)]
@@ -24,7 +27,9 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
     [Produces("text/event-stream")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-    public async Task Stream([FromBody] AssistantChatRequest request, CancellationToken cancellationToken = default)
+    public async Task Stream(
+        [FromBody] AssistantChatRequest request,
+        CancellationToken cancellationToken)
     {
         var requestedId = HttpContext.TraceIdentifier;
         var startedAt = TimeProvider.System.GetTimestamp();
@@ -34,31 +39,48 @@ public sealed class AssistantController(INexaAssistantService assistant, AIOptio
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache, no-transform";
         Response.Headers.Append("X-Accel-Buffering", "no");
-
         try
         {
-            await WriteEventAsync("started", new { requestedId, model = options.Model, responseStyle = request.ResponseStyle }, cancellationToken);
-            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, request.ResponseStyle, cancellationToken))
+            await WriteEventAsync("started", new
+            {
+                requestedId,
+                model = options.Model,
+                responseStyle = request.ResponseStyle
+            }, cancellationToken);
+
+            await foreach (var chunk in assistant.StreamResponseAsync(
+                request.Messages,
+                request.ResponseStyle,
+                cancellationToken))
             {
                 await WriteEventAsync("delta", new { sequence = sequence++, content = chunk }, cancellationToken);
             }
-            await WriteEventAsync("done", new { chunks = sequence, elapsedMs = (long)TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds }, cancellationToken);
+            await WriteEventAsync("done",
+                new
+                {
+                    chunks = sequence,
+                    elapsedMs = (long)TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds
+                }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation("Nexa AI streaming request was cancedlled by the client");
+            logger.LogInformation("Nexa AI streaming request was cancelled by the client.");
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "Local AI provider failed while streaming a response");
-            await WriteEventAsync(
-                "error",
-                new { message = "Nexa AI couldn't reach local model. Confirm Ollama and configured model are running." },
+            logger.LogError(exception, "Local AI provider failed while streaming a response");
+            await WriteEventAsync("error", new { message = "Nexa AI couldn't reach local model. Confirm Ollama and configured model are running;" },
                 cancellationToken);
         }
     }
 
-    private async Task WriteEventAsync(string eventName, object payload, CancellationToken cancellationToken = default)
+    //Server Sent Event aka SSE
+    //Events -> delta, done, error
+    //event: delta
+    //data: {"content":"hello"}
+    //event: done
+    //data: {}
+    private async Task WriteEventAsync(string eventName, object payload, CancellationToken cancellationToken)
     {
         await Response.WriteAsync($"event: {eventName}\n", cancellationToken);
         await Response.WriteAsync($"data: {JsonSerializer.Serialize(payload)}\n\n", cancellationToken);
