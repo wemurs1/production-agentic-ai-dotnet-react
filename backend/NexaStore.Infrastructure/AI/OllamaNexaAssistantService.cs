@@ -8,9 +8,11 @@ namespace NexaStore.Infrastructure.AI;
 public sealed class OllamaNexaAssistantService(
     IChatClient chatClient,
     AIOptions options,
+    NexaStoreAITools tools,
+    AIToolActivityTracker activityTracker,
     ILogger<OllamaNexaAssistantService> logger) : INexaAssistantService
 {
-    public async IAsyncEnumerable<string> StreamResponseAsync(
+    public async IAsyncEnumerable<AssistantStreamUpdate> StreamResponseAsync(
         IReadOnlyList<AssistantMessageDto> messages,
         string responseStyle = AssistantResponseStyles.Balanced,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -34,14 +36,23 @@ public sealed class OllamaNexaAssistantService(
             new ChatOptions
             {
                 Temperature = options.Temperature,
-                MaxOutputTokens = options.MaxOutputTokens
+                MaxOutputTokens = options.MaxOutputTokens,
+                Tools=tools.CreateAll()
             },
             cancellationToken: cancellationToken))
         {
+            foreach (var activity in activityTracker.Drain())
+            {
+                yield return activity;
+            }
             if (!string.IsNullOrEmpty(update.Text))
             {
-                yield return update.Text;
+                yield return AssistantStreamUpdate.Delta(update.Text);
             }
+        }
+        foreach (var activity in activityTracker.Drain())
+        {
+            yield return activity;
         }
     }
 }

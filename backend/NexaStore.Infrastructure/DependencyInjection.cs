@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NexaStore.Application.Abstractions;
 using NexaStore.Application.AI;
 using NexaStore.Infrastructure.AI;
@@ -24,7 +25,31 @@ public static class DependencyInjection
             return services;
         }
 
-        services.AddSingleton<IChatClient>(_ => new OllamaApiClient(new Uri(options.EndPoint), options.Model));
+        services.AddSingleton<IChatClient>(provider =>
+        {
+            var httpCLient = new HttpClient { BaseAddress = new Uri(options.EndPoint), Timeout = TimeSpan.FromMinutes(10) };
+
+            var ollamaClient = new OllamaApiClient(httpCLient, options.Model);
+
+            return new ChatClientBuilder(ollamaClient)
+                .UseFunctionInvocation(
+                    provider.GetRequiredService<ILoggerFactory>(),
+                    client =>
+                    {
+                        client.AllowConcurrentInvocation = false;
+                        client.IncludeDetailedErrors = false;
+                        client.MaximumConsecutiveErrorsPerRequest = 0;
+                        client.MaximumIterationsPerRequest = 5;
+                        client.TerminateOnUnknownCalls = true;
+                    }
+                )
+                .Build();
+        });
+
+        services.AddScoped<AIToolActivityTracker>();
+
+        services.AddScoped<NexaStoreAITools>();
+
         services.AddScoped<INexaAssistantService, OllamaNexaAssistantService>();
         return services;
     }

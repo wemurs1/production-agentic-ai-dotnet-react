@@ -23,9 +23,19 @@ public sealed record AssistantStatusDto(
     IReadOnlyList<string> Capabilities,
     IReadOnlyList<string> ResponseStyles);
 
+public sealed record AssistantStreamUpdate(
+    string Type,
+    string? Content = null,
+    string? ToolName = null,
+    string? ToolLabel = null)
+{
+    public static AssistantStreamUpdate Delta(string content) => new("delta", Content: content);
+    public static AssistantStreamUpdate Tool(string name, string label) => new("tool", ToolName: name, ToolLabel: label);
+};
+
 public interface INexaAssistantService
 {
-    IAsyncEnumerable<string> StreamResponseAsync(
+    IAsyncEnumerable<AssistantStreamUpdate> StreamResponseAsync(
         IReadOnlyList<AssistantMessageDto> messages,
         string responseStyle = AssistantResponseStyles.Balanced,
         CancellationToken cancellationToken = default);

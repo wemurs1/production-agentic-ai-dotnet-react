@@ -19,7 +19,7 @@ public sealed class AssistantController(
         options.Enabled,
         options.Provider,
         options.Model,
-        ["chat", "prompt-styles", "streaming", "cancellation"],
+        ["chat", "prompt-styles", "streaming", "cancellation", "product-tools", "inventory-tools"],
         AssistantResponseStyles.All));
 
 
@@ -43,9 +43,23 @@ public sealed class AssistantController(
         try
         {
             await WriteEventAsync("started", new { requestedId, model = options.Model, responseStyle = request.ResponseStyle }, cancellationToken);
-            await foreach (var chunk in assistant.StreamResponseAsync(request.Messages, request.ResponseStyle, cancellationToken))
+            await foreach (var update in assistant.StreamResponseAsync(request.Messages, request.ResponseStyle, cancellationToken))
             {
-                await WriteEventAsync("delta", new { sequence = sequence++, content = chunk }, cancellationToken);
+                if (update.Type == "tool")
+                {
+                    await WriteEventAsync("tool", new
+                    {
+                        name = update.ToolName,
+                        label = update.ToolLabel
+                    }, cancellationToken);
+
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(update.Content))
+                {
+                    await WriteEventAsync("delta", new { sequence = sequence++, content = update.Content }, cancellationToken);
+                }
             }
             await WriteEventAsync("done", new { chunks = sequence, elapsedMs = TimeProvider.System.GetElapsedTime(startedAt).TotalMilliseconds }, cancellationToken);
         }
