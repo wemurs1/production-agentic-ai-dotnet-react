@@ -12,3 +12,4 @@ frontend/nexastore-web/dist/
 .env
 .env.*
 !.env.example
+openai.key
